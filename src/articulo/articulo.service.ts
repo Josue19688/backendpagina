@@ -149,6 +149,100 @@ export class ArticuloService {
     }
   }
   
+  async findAllPublic(paginationDto: PaginationDto) {
+    const { limit = 8, offset = 0 } = paginationDto;
+  
+    try {
+      const { entities: articulos, raw } = await this.articuloRepository
+        .createQueryBuilder('articulo')
+        .select([
+          'articulo.id',
+          'articulo.createdAt',
+        ])
+        .addSelect(
+          `(SELECT row_to_json(block) FROM (
+              SELECT 
+                block->>'id' AS id, 
+                block->>'type' AS type, 
+                block->'data'->>'text' AS text, 
+                block->'data'->>'level' AS level
+              FROM jsonb_array_elements(articulo.blocks) AS block
+              WHERE block->>'type' = 'header'
+              LIMIT 1
+            ) AS block)`,
+          'headerBlock',
+        )
+        .addSelect(
+          `(SELECT row_to_json(block) FROM (
+              SELECT 
+                block->>'id' AS id, 
+                block->>'type' AS type, 
+                block->'data'->'file'->>'url' AS imageUrl
+              FROM jsonb_array_elements(articulo.blocks) AS block
+              WHERE block->>'type' = 'image'
+              LIMIT 1
+            ) AS block)`,
+          'imageBlock',
+        )
+        .orderBy('articulo.createdAt', 'DESC')
+        .take(limit)
+        .skip(offset)
+        .getRawAndEntities();
+  
+      const total = await this.articuloRepository.count();
+  
+      const filteredArticulos = articulos.map((articulo) => {
+        const headerBlock = raw.find((r) => r.articulo_id === articulo.id)?.headerBlock;
+        const imageBlock = raw.find((r) => r.articulo_id === articulo.id)?.imageBlock;
+        
+        return {
+          id: articulo.id,
+          time: new Date(articulo.createdAt).getTime().toString(),
+          createdAt: articulo.createdAt,
+          blocks: [
+            ...(headerBlock
+              ? [
+                  {
+                    id: headerBlock.id,
+                    type: headerBlock.type,
+                    data: {
+                      text: headerBlock.text,
+                      level: parseInt(headerBlock.level, 10),
+                    },
+                  },
+                ]
+              : []),
+            ...(imageBlock
+              ? [
+                  {
+                    id: imageBlock.id,
+                    type: imageBlock.type,
+                    data: {
+                      file: {
+                        url: imageBlock?.imageurl, 
+                      },
+                    },
+                  },
+                ]
+              : []),
+          ],
+        };
+      });
+  
+     
+      return {
+        ok: true,
+        total,
+        pages: Math.ceil(total / limit),
+        articles: filteredArticulos,
+      };
+    } catch (error) {
+      this.handleExceptions(error);
+    }
+  }
+  
+  
+  
   
 
   async findOne(criterio: string): Promise<Articulo> {

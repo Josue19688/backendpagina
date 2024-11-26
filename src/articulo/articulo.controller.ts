@@ -23,6 +23,11 @@ export class ArticuloController {
     return this.articuloService.findAllPagination(paginatioDto);
   }
 
+  @Get('/public')
+  findAllPublic(@Query() paginatioDto:PaginationDto) {
+    return this.articuloService.findAllPublic(paginatioDto);
+  }
+
   @Get(':termino')
   findOne(@Param('termino') termino: string) {
     return this.articuloService.findOne(termino);
